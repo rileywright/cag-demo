@@ -114,6 +114,11 @@ tests/
 **/test/
 **/tests/
 
+# Document folders (development/testing only)
+docs/
+documents/
+uploads/
+
 # Package manager lock files (keep one, remove others based on preference)
 # package-lock.json
 # yarn.lock
