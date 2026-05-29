@@ -108,6 +108,12 @@ build/
 *.swp
 *.swo
 
+# Test folders (development/testing only)
+test/
+tests/
+**/test/
+**/tests/
+
 # Package manager lock files (keep one, remove others based on preference)
 # package-lock.json
 # yarn.lock
