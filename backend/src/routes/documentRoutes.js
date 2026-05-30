@@ -153,7 +153,8 @@ router.post('/upload',
       const processedDocument = await documentService.processDocument(
         processedFile.buffer,
         processedFile.originalName,
-        processedFile.mimetype
+        processedFile.mimetype,
+        req.sessionId
       );
 
       const document = {

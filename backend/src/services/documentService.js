@@ -1,4 +1,5 @@
 import pdfParse from 'pdf-parse';
+import mammoth from 'mammoth';
 import crypto from 'crypto';
 import path from 'path';
 import logger from '../utils/logger.js';
@@ -89,38 +90,30 @@ class DocumentService {
 
   async extractTextFromDOCX(buffer) {
     try {
-      // Extract plain text from DOCX - remove binary formatting
-      const text = buffer.toString('utf8');
+      // Use mammoth to properly extract text from DOCX
+      const result = await mammoth.extractRawText({ buffer });
+      const text = result.value;
       
-      // Extract readable text patterns (letters, numbers, basic punctuation)
-      const textPatterns = [
-        // Match sequences of readable characters
-        /[a-zA-Z0-9\s.,;:!?'"()-]+/g,
-        // Match common words and phrases
-        /\b[A-Za-z]+\b/g
-      ];
-      
-      let extractedText = '';
-      textPatterns.forEach(pattern => {
-        const matches = text.match(pattern) || [];
-        extractedText += matches.join(' ') + ' ';
-      });
+      // Log any warnings from mammoth
+      if (result.messages.length > 0) {
+        logger.warn('DOCX extraction warnings', { messages: result.messages });
+      }
       
       // Clean up the text
-      extractedText = extractedText
+      let cleanedText = text
         .replace(/\s+/g, ' ') // Normalize whitespace
         .replace(/[^\x20-\x7E]/g, '') // Remove non-printable characters
         .trim();
       
       // Limit to reasonable size for tokenization
-      extractedText = extractedText.substring(0, 50000); // 50K chars max
+      cleanedText = cleanedText.substring(0, 50000); // 50K chars max
       
-      if (!extractedText || extractedText.length === 0) {
+      if (!cleanedText || cleanedText.length === 0) {
         throw new Error('No readable text content found in DOCX file');
       }
 
       const documentInfo = {
-        text: extractedText,
+        text: cleanedText,
         pages: 1,
         info: {},
         metadata: {},
@@ -128,7 +121,7 @@ class DocumentService {
       };
 
       logger.info('DOCX text extracted successfully', {
-        textLength: extractedText.length,
+        textLength: cleanedText.length,
         pages: 1
       });
 
@@ -164,9 +157,9 @@ class DocumentService {
 
   // chunkText REMOVED - Pure CAG uses full document context
 
-  async getCachedDocument(documentId) {
+  async getCachedDocument(documentId, sessionId) {
     try {
-      const cacheKey = `doc:${documentId}`;
+      const cacheKey = `doc:${sessionId}:${documentId}`;
       const cachedData = await cacheService.get(cacheKey);
       
       if (!cachedData) {
@@ -240,8 +233,10 @@ class DocumentService {
     return null;
   }
 
-  async processDocument(buffer, originalName, mimetype) {
+  async processDocument(buffer, originalName, mimetype, sessionId) {
     try {
+      logger.info('processDocument called', { sessionId, originalName });
+      
       // Force garbage collection before processing
       if (global.gc) {
         global.gc();
@@ -261,8 +256,8 @@ class DocumentService {
       const documentId = crypto.randomUUID();
       const documentHash = crypto.createHash('sha256').update(buffer).digest('hex');
       
-      // Store in Redis with proper CAG format
-      const cacheKey = `doc:${documentId}`;
+      // Store in Redis with session-specific cache key for security
+      const cacheKey = `doc:${sessionId}:${documentId}`;
       const cacheData = {
         text: processedText,
         tokens: tokenizationResult.tokens,

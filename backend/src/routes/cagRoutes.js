@@ -102,8 +102,8 @@ router.post('/query',
       let cachedDocument = null;
       
       if (documentId) {
-        // Try to get from cache first (CAG approach)
-        cachedDocument = await documentService.getCachedDocument(documentId);
+        // Try to get from cache first (CAG approach) with session isolation
+        cachedDocument = await documentService.getCachedDocument(documentId, req.sessionId);
         
         if (!cachedDocument) {
           // Fallback to session documents
@@ -120,7 +120,7 @@ router.post('/query',
       } else if (req.session.documents && req.session.documents.length > 0) {
         // Use latest document from session
         const latestDoc = req.session.documents[req.session.documents.length - 1];
-        cachedDocument = await documentService.getCachedDocument(latestDoc.documentId) || latestDoc;
+        cachedDocument = await documentService.getCachedDocument(latestDoc.documentId, req.sessionId) || latestDoc;
       }
 
       if (!cachedDocument) {

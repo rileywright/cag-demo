@@ -6,7 +6,7 @@ const options = {
     info: {
       title: 'Legal CAG API',
       version: '1.0.0',
-      description: 'Cache Augmented Generation system for legal contract analysis',
+      description: 'Production-ready Cache Augmented Generation (CAG) system for legal document analysis with real-time ROI tracking, multi-user support, and session-isolated caching',
       contact: {
         name: 'CAG Demo Team',
         email: 'demo@cag-legal.com'
@@ -161,9 +161,13 @@ const options = {
               type: 'integer',
               description: 'Length of extracted text'
             },
-            chunkCount: {
+            tokenCount: {
               type: 'integer',
-              description: 'Number of text chunks'
+              description: 'Total tokens in document'
+            },
+            pageCount: {
+              type: 'integer',
+              description: 'Number of pages in document'
             },
             partiesCount: {
               type: 'integer',
@@ -176,6 +180,39 @@ const options = {
             risksCount: {
               type: 'integer',
               description: 'Number of risks identified'
+            }
+          }
+        },
+        CAGCostAnalysis: {
+          type: 'object',
+          properties: {
+            cachedTokens: {
+              type: 'integer',
+              description: 'Number of tokens retrieved from cache'
+            },
+            newTokens: {
+              type: 'integer',
+              description: 'Number of newly processed tokens'
+            },
+            totalCost: {
+              type: 'number',
+              description: 'Total cost of the query in USD'
+            },
+            cachedCost: {
+              type: 'number',
+              description: 'Cost of cached tokens'
+            },
+            newCost: {
+              type: 'number',
+              description: 'Cost of new tokens'
+            },
+            savingsPercent: {
+              type: 'number',
+              description: 'Percentage cost savings from caching'
+            },
+            cacheEfficiency: {
+              type: 'number',
+              description: 'Cache efficiency percentage'
             }
           }
         },
@@ -225,6 +262,10 @@ const options = {
                 model: {
                   type: 'string',
                   description: 'AI model used'
+                },
+                queryTime: {
+                  type: 'integer',
+                  description: 'Query processing time in milliseconds'
                 },
                 tokens: {
                   type: 'object',
@@ -427,23 +468,23 @@ const options = {
     tags: [
       {
         name: 'Session',
-        description: 'Session management operations'
+        description: 'Session management operations with JWT authentication'
       },
       {
         name: 'Documents',
-        description: 'Document upload and management'
+        description: 'Document upload and processing (PDF, DOCX) with CAG caching'
       },
       {
         name: 'CAG',
-        description: 'Cache Augmented Generation queries'
+        description: 'Cache Augmented Generation queries with real-time cost analysis'
       },
       {
         name: 'ROI',
-        description: 'Return on Investment calculations'
+        description: 'Return on Investment calculations with CAG cost savings'
       },
       {
         name: 'Health',
-        description: 'System health and status'
+        description: 'System health and status monitoring'
       }
     ]
   },
