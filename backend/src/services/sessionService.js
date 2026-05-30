@@ -253,6 +253,50 @@ class SessionService {
   isRedisConnected() {
     return this.isConnected;
   }
+
+  async findUserSession(username, userHash) {
+    if (!this.isConnected) {
+      throw new Error('Redis not connected');
+    }
+
+    try {
+      // Look for existing sessions for this user
+      const pattern = 'session:user_' + userHash + '_*';
+      const keys = await this.client.keys(pattern);
+      
+      if (keys.length === 0) {
+        return null;
+      }
+
+      // Get the most recent session for this user
+      let mostRecentSession = null;
+      let mostRecentTime = 0;
+
+      for (const key of keys) {
+        try {
+          const sessionData = await this.client.get(key);
+          if (sessionData) {
+            const session = JSON.parse(sessionData);
+            const sessionTime = new Date(session.createdAt).getTime();
+            
+            if (sessionTime > mostRecentTime) {
+              mostRecentTime = sessionTime;
+              mostRecentSession = session;
+            }
+          }
+        } catch (parseError) {
+          logger.warn('Failed to parse session data:', parseError);
+          // Clean up corrupted session
+          await this.client.del(key);
+        }
+      }
+
+      return mostRecentSession;
+    } catch (error) {
+      logger.error('Failed to find user session:', error);
+      throw new Error('User session lookup failed');
+    }
+  }
 }
 
 export default new SessionService();

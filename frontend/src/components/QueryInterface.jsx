@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { MessageCircle, Send, FileText, Clock, DollarSign, Zap, Lightbulb } from 'lucide-react';
+import { MessageCircle, Send, FileText, Clock, DollarSign, Zap, Lightbulb, ArrowLeft } from 'lucide-react';
 import { formatCurrency, formatTime, formatPercentage } from '../utils/formatters';
 
-const QueryInterface = ({ documents, onQuery, loading, currentQuery }) => {
+const QueryInterface = ({ documents, onQuery, loading, currentQuery, onNewQuery }) => {
   const [queryText, setQueryText] = useState('');
   const [selectedDocument, setSelectedDocument] = useState('');
   const [suggestions] = useState([
@@ -38,6 +38,17 @@ const QueryInterface = ({ documents, onQuery, loading, currentQuery }) => {
     <div className="space-y-6">
       {/* Header */}
       <div className="text-center">
+        {currentQuery && (
+          <div className="mb-4">
+            <button
+              onClick={onNewQuery}
+              className="inline-flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span>Ask Another Question</span>
+            </button>
+          </div>
+        )}
         <h2 className="text-2xl font-bold text-gray-900 mb-2">Ask Legal Questions</h2>
         <p className="text-gray-600">
           Get instant AI-powered analysis of your legal documents

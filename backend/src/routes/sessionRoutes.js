@@ -1,6 +1,7 @@
 import express from 'express';
 import { body, validationResult } from 'express-validator';
 import rateLimit from 'express-rate-limit';
+import crypto from 'crypto';
 import tokenService from '../services/tokenService.js';
 import sessionService from '../services/sessionService.js';
 import sessionAuth from '../middleware/sessionAuth.js';
@@ -90,6 +91,16 @@ const sessionCreationLimiter = rateLimit({
  *               $ref: '#/components/schemas/Error'
  */
 router.post('/create', sessionCreationLimiter, [
+  body('username')
+    .notEmpty()
+    .withMessage('Username is required')
+    .isLength({ min: 2, max: 50 })
+    .withMessage('Username must be 2-50 characters'),
+  body('password')
+    .notEmpty()
+    .withMessage('Password is required')
+    .isLength({ min: 2, max: 100 })
+    .withMessage('Password must be 2-100 characters'),
   body('clientInfo')
     .optional()
     .isObject()
@@ -114,11 +125,19 @@ router.post('/create', sessionCreationLimiter, [
   }
 
   try {
-    const { clientInfo = {} } = req.body;
-    const { token, sessionId } = tokenService.generateSessionToken();
+    const { username, password, clientInfo = {} } = req.body;
+    
+    // For POC, accept any username/password combination
+    // In production, validate against user database
+    
+    // Generate user-specific session ID
+    const userHash = crypto.createHash('sha256').update(`${username}:${password}`).digest('hex').substring(0, 16);
+    const sessionId = `user_${userHash}_${Date.now()}`;
+    const { token } = tokenService.generateSessionToken();
 
     const sessionData = {
       sessionId,
+      username,
       clientInfo: {
         userAgent: clientInfo.userAgent || req.get('User-Agent'),
         ip: clientInfo.ip || req.ip,
@@ -128,13 +147,15 @@ router.post('/create', sessionCreationLimiter, [
       queryCount: 0,
       totalCost: 0,
       cacheHits: 0,
-      cacheMisses: 0
+      cacheMisses: 0,
+      createdAt: new Date().toISOString()
     };
 
     await sessionService.createSession(sessionId, sessionData);
 
-    logger.info('New session created', {
+    logger.info('User session created', {
       sessionId,
+      username,
       ip: req.ip,
       userAgent: req.get('User-Agent')
     });
@@ -157,6 +178,129 @@ router.post('/create', sessionCreationLimiter, [
     res.status(500).json({
       success: false,
       error: 'Session creation failed',
+      details: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+}));
+
+/**
+ * @swagger
+ * /api/session/login:
+ *   post:
+ *     tags:
+ *       - Session
+ *     summary: Login with existing credentials
+ *     description: Authenticates user and returns existing session or creates new one
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - username
+ *               - password
+ *             properties:
+ *               username:
+ *                 type: string
+ *                 minLength: 2
+ *                 maxLength: 50
+ *               password:
+ *                 type: string
+ *                 minLength: 2
+ *                 maxLength: 100
+ *     responses:
+ *       200:
+ *         description: Login successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   $ref: '#/components/schemas/SessionResponse'
+ */
+router.post('/login', sessionCreationLimiter, [
+  body('username')
+    .notEmpty()
+    .withMessage('Username is required')
+    .isLength({ min: 2, max: 50 })
+    .withMessage('Username must be 2-50 characters'),
+  body('password')
+    .notEmpty()
+    .withMessage('Password is required')
+    .isLength({ min: 2, max: 100 })
+    .withMessage('Password must be 2-100 characters')
+], errorHandler.async(async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      error: 'Validation failed',
+      details: errors.array()
+    });
+  }
+
+  try {
+    const { username, password } = req.body;
+    
+    // For POC, accept any username/password combination
+    // In production, validate against user database
+    
+    // Generate consistent user hash for same credentials
+    const userHash = crypto.createHash('sha256').update(`${username}:${password}`).digest('hex').substring(0, 16);
+    
+    // For now, always create a new session (we'll fix session recovery later)
+    const sessionId = `user_${userHash}_${Date.now()}`;
+    const tokenResult = tokenService.generateSessionToken();
+    const token = tokenResult.token;
+    
+    const sessionData = {
+      sessionId,
+      username,
+      clientInfo: {
+        userAgent: req.get('User-Agent'),
+        ip: req.ip
+      },
+      documents: [],
+      queryCount: 0,
+      totalCost: 0,
+      cacheHits: 0,
+      cacheMisses: 0,
+      createdAt: new Date().toISOString()
+    };
+
+    await sessionService.createSession(sessionId, sessionData);
+    
+    logger.info('User created new session', {
+      sessionId,
+      username
+    });
+
+    res.status(201).json({
+      success: true,
+      data: {
+        sessionId,
+        token,
+        username,
+        expiresAt: new Date(Date.now() + (30 * 60 * 1000)).toISOString(),
+        existingSession: false,
+        documentCount: sessionData.documents?.length || 0,
+        security: {
+          sessionTimeout: `${process.env.SESSION_TIMEOUT_MINUTES} minutes`,
+          tokenType: 'JWT',
+          storage: 'Redis'
+        }
+      }
+    });
+  } catch (error) {
+    logger.error('Login failed:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Login failed',
       details: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
     });
   }

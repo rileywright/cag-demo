@@ -48,8 +48,13 @@ api.interceptors.response.use(
 
 // Auth API
 export const authAPI = {
-  createSession: async () => {
-    const response = await api.post('/api/session/create');
+  createSession: async (username, password) => {
+    const response = await api.post('/api/session/create', { username, password });
+    return response.data.data;
+  },
+  
+  login: async (username, password) => {
+    const response = await api.post('/api/session/login', { username, password });
     return response.data.data;
   },
   
@@ -75,6 +80,11 @@ export const documentAPI = {
   
   getDocument: async (documentId) => {
     const response = await api.get(`/api/documents/${documentId}`);
+    return response.data.data;
+  },
+  
+  getDocuments: async () => {
+    const response = await api.get('/api/documents');
     return response.data.data;
   },
 };

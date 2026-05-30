@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { FileText, Upload, MessageCircle, TrendingUp, Clock, DollarSign, Zap, Shield, LogOut } from 'lucide-react';
 import { authAPI, documentAPI, cagAPI, roiAPI } from './services/api';
 import { formatCurrency, formatTime, formatTokens, formatPercentage } from './utils/formatters';
+import Login from './components/Login';
 import DocumentUpload from './components/DocumentUpload';
 import QueryInterface from './components/QueryInterface';
 import ResultsDisplay from './components/ResultsDisplay';
@@ -17,25 +18,71 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('upload');
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
-  // Initialize session on mount
+  // Check for existing session on mount
   useEffect(() => {
-    initializeSession();
+    checkExistingSession();
   }, []);
 
-  const initializeSession = async () => {
+  const checkExistingSession = () => {
+    const sessionId = localStorage.getItem('sessionId');
+    const sessionToken = localStorage.getItem('sessionToken');
+    
+    if (sessionId && sessionToken) {
+      // User has a stored session, try to validate it
+      validateStoredSession();
+    } else {
+      // No stored session, show login
+      setIsLoggedIn(false);
+    }
+  };
+
+  const validateStoredSession = async () => {
+    try {
+      const sessionData = await authAPI.getSessionStatus();
+      setSession(sessionData.session);
+      setIsLoggedIn(true);
+      await loadCachedDocuments();
+    } catch (err) {
+      // Session invalid, clear and show login
+      localStorage.removeItem('sessionId');
+      localStorage.removeItem('sessionToken');
+      setIsLoggedIn(false);
+    }
+  };
+
+  const handleLogin = async (username, password) => {
     try {
       setLoading(true);
-      const sessionData = await authAPI.createSession();
+      const sessionData = await authAPI.login(username, password);
       setSession(sessionData);
       localStorage.setItem('sessionId', sessionData.sessionId);
       localStorage.setItem('sessionToken', sessionData.token);
+      setIsLoggedIn(true);
+      
+      // Load cached documents if they exist
+      await loadCachedDocuments();
+      
       setError(null);
     } catch (err) {
-      setError('Failed to initialize session. Please refresh the page.');
-      console.error('Session initialization error:', err);
+      setError('Login failed. Please try again.');
+      console.error('Login error:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadCachedDocuments = async () => {
+    try {
+      // Try to get documents from session or cache
+      const response = await documentAPI.getDocuments();
+      if (response && response.documents) {
+        setDocuments(response.documents);
+      }
+    } catch (err) {
+      console.log('No cached documents found:', err.message);
+      // It's okay if there are no cached documents
     }
   };
 
@@ -64,9 +111,9 @@ function App() {
       // Calculate ROI for this query
       const roiCalculation = await roiAPI.calculateROI({
         documentLength: documents.find(d => d.documentId === documentId)?.statistics?.textLength || 50000,
-        responseTime: response.metadata.queryTime,
+        responseTime: response.data.metadata.queryTime,
         queryComplexity: 'medium',
-        fromCache: response.metadata.fromCache,
+        fromCache: response.data.metadata.fromCache || false,
         documentMetadata: {},
         costAnalysis: response.costAnalysis
       });
@@ -78,7 +125,7 @@ function App() {
         documentId,
         documentName: documents.find(d => d.documentId === documentId)?.originalName,
         timestamp: new Date().toISOString(),
-        responseTime: response.metadata.queryTime,
+        responseTime: response.data.metadata.queryTime,
         costAnalysis: response.costAnalysis,
         roi: roiCalculation,
         status: 'completed'
@@ -92,10 +139,21 @@ function App() {
     } catch (err) {
       setError('Failed to process query. Please try again.');
       console.error('Query error:', err);
-      setCurrentQuery({ ...currentQuery, status: 'error', error: err.message });
+      setCurrentQuery({ 
+        query: queryText, 
+        status: 'error', 
+        error: err.message,
+        timestamp: new Date().toISOString()
+      });
+      setActiveTab('query'); // Stay on query tab if there's an error
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleNewQuery = () => {
+    setCurrentQuery(null);
+    setActiveTab('query');
   };
 
   const handleLogout = () => {
@@ -106,8 +164,14 @@ function App() {
     setQueries([]);
     setCurrentQuery(null);
     setROIData(null);
-    initializeSession();
+    setIsLoggedIn(false);
+    setActiveTab('upload');
   };
+
+  // Show login screen if not logged in
+  if (!isLoggedIn) {
+    return <Login onLogin={handleLogin} loading={loading} />;
+  }
 
   if (loading && !session) {
     return (
@@ -137,8 +201,8 @@ function App() {
             <div className="flex items-center space-x-4">
               {session && (
                 <div className="text-right">
-                  <p className="text-sm text-gray-500">Session Active</p>
-                  <p className="text-xs text-gray-400">ID: {session.sessionId.substring(0, 8)}...</p>
+                  <p className="text-sm text-gray-500">Welcome, {session.username || 'Guest'}</p>
+                  <p className="text-xs text-gray-400">Session: {session.sessionId?.substring(0, 8)}...</p>
                 </div>
               )}
               <button
@@ -257,6 +321,7 @@ function App() {
                 onQuery={handleQuery} 
                 loading={loading}
                 currentQuery={currentQuery}
+                onNewQuery={handleNewQuery}
               />
             )}
             

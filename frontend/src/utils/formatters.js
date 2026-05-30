@@ -33,7 +33,14 @@ export const formatTokens = (tokens) => {
 
 // Percentage formatting
 export const formatPercentage = (value, decimals = 1) => {
-  return `${value.toFixed(decimals)}%`;
+  if (value === null || value === undefined || isNaN(value)) {
+    return '0%';
+  }
+  const numValue = typeof value === 'string' ? parseFloat(value) : value;
+  if (isNaN(numValue)) {
+    return '0%';
+  }
+  return `${numValue.toFixed(decimals)}%`;
 };
 
 // Date formatting

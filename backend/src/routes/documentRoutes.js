@@ -302,6 +302,28 @@ router.post('/upload',
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
+// Get all documents for the current session
+router.get('/', sessionAuth.authenticate, errorHandler.async(async (req, res) => {
+  try {
+    const documents = req.session.documents || [];
+    
+    res.json({
+      success: true,
+      data: {
+        documents: documents,
+        count: documents.length
+      }
+    });
+  } catch (error) {
+    logger.error('Failed to get documents:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve documents',
+      details: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+}));
+
 router.get('/list', sessionAuth.authenticate, errorHandler.async(async (req, res) => {
   try {
     const documents = req.session.documents || [];
