@@ -130,14 +130,14 @@ router.post('/create', sessionCreationLimiter, [
     // For POC, accept any username/password combination
     // In production, validate against user database
     
-    // Generate user-specific session ID
+    // Generate user-specific session ID using JWT UUID
     const userHash = crypto.createHash('sha256').update(`${username}:${password}`).digest('hex').substring(0, 16);
-    const sessionId = `user_${userHash}_${Date.now()}`;
-    const { token } = tokenService.generateSessionToken();
+    const { token, sessionId } = tokenService.generateSessionToken();
 
     const sessionData = {
       sessionId,
       username,
+      userHash,
       clientInfo: {
         userAgent: clientInfo.userAgent || req.get('User-Agent'),
         ip: clientInfo.ip || req.ip,
@@ -253,42 +253,63 @@ router.post('/login', sessionCreationLimiter, [
     // Generate consistent user hash for same credentials
     const userHash = crypto.createHash('sha256').update(`${username}:${password}`).digest('hex').substring(0, 16);
     
-    // For now, always create a new session (we'll fix session recovery later)
-    const sessionId = `user_${userHash}_${Date.now()}`;
-    const tokenResult = tokenService.generateSessionToken();
-    const token = tokenResult.token;
+    // Try to find existing session for this user
+    const existingSession = await sessionService.findUserSession(username, userHash);
     
-    const sessionData = {
-      sessionId,
-      username,
-      clientInfo: {
-        userAgent: req.get('User-Agent'),
-        ip: req.ip
-      },
-      documents: [],
-      queryCount: 0,
-      totalCost: 0,
-      cacheHits: 0,
-      cacheMisses: 0,
-      createdAt: new Date().toISOString()
-    };
-
-    await sessionService.createSession(sessionId, sessionData);
+    let sessionId, token, sessionData, isNewSession = false;
     
-    logger.info('User created new session', {
-      sessionId,
-      username
-    });
+    if (existingSession) {
+      // Return existing session
+      sessionId = existingSession.sessionId;
+      token = tokenService.generateSessionToken().token; // Generate new token for existing session
+      sessionData = existingSession;
+      
+      logger.info('User logged in with existing session', {
+        sessionId,
+        username,
+        existingDocuments: existingSession.documents?.length || 0
+      });
+    } else {
+      // Create new session
+      const tokenResult = tokenService.generateSessionToken();
+      token = tokenResult.token;
+      sessionId = tokenResult.sessionId;
+      isNewSession = true;
+      
+      sessionData = {
+        sessionId,
+        username,
+        userHash,
+        clientInfo: {
+          userAgent: req.get('User-Agent'),
+          ip: req.ip
+        },
+        documents: [],
+        queryCount: 0,
+        totalCost: 0,
+        cacheHits: 0,
+        cacheMisses: 0,
+        createdAt: new Date().toISOString()
+      };
 
-    res.status(201).json({
+      await sessionService.createSession(sessionId, sessionData);
+      
+      logger.info('User created new session', {
+        sessionId,
+        username
+      });
+    }
+
+    res.status(existingSession ? 200 : 201).json({
       success: true,
       data: {
         sessionId,
         token,
         username,
         expiresAt: new Date(Date.now() + (30 * 60 * 1000)).toISOString(),
-        existingSession: false,
+        existingSession: !!existingSession,
         documentCount: sessionData.documents?.length || 0,
+        isNewSession,
         security: {
           sessionTimeout: `${process.env.SESSION_TIMEOUT_MINUTES} minutes`,
           tokenType: 'JWT',

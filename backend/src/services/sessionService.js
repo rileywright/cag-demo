@@ -260,16 +260,16 @@ class SessionService {
     }
 
     try {
-      // Look for existing sessions for this user
-      const pattern = 'session:user_' + userHash + '_*';
+      // Look for all sessions and find ones matching userHash
+      const pattern = 'session:*';
       const keys = await this.client.keys(pattern);
       
       if (keys.length === 0) {
         return null;
       }
 
-      // Get the most recent session for this user
-      let mostRecentSession = null;
+      // Find sessions with matching userHash
+      let matchingSession = null;
       let mostRecentTime = 0;
 
       for (const key of keys) {
@@ -277,11 +277,15 @@ class SessionService {
           const sessionData = await this.client.get(key);
           if (sessionData) {
             const session = JSON.parse(sessionData);
-            const sessionTime = new Date(session.createdAt).getTime();
             
-            if (sessionTime > mostRecentTime) {
-              mostRecentTime = sessionTime;
-              mostRecentSession = session;
+            // Check if this session belongs to the same user (by userHash)
+            if (session.userHash === userHash) {
+              const sessionTime = new Date(session.createdAt).getTime();
+              
+              if (sessionTime > mostRecentTime) {
+                mostRecentTime = sessionTime;
+                matchingSession = session;
+              }
             }
           }
         } catch (parseError) {
@@ -291,7 +295,7 @@ class SessionService {
         }
       }
 
-      return mostRecentSession;
+      return matchingSession;
     } catch (error) {
       logger.error('Failed to find user session:', error);
       throw new Error('User session lookup failed');
