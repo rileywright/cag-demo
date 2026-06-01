@@ -261,7 +261,8 @@ router.post('/login', sessionCreationLimiter, [
     if (existingSession) {
       // Return existing session
       sessionId = existingSession.sessionId;
-      token = tokenService.generateSessionToken().token; // Generate new token for existing session
+      const tokenResult = tokenService.generateSessionTokenForId(sessionId); // Use existing session ID
+      token = tokenResult.token;
       sessionData = existingSession;
       
       logger.info('User logged in with existing session', {
@@ -355,7 +356,8 @@ router.get('/status', sessionAuth.authenticate, errorHandler.async(async (req, r
 
 router.post('/refresh', sessionAuth.authenticate, errorHandler.async(async (req, res) => {
   try {
-    const { token, sessionId } = tokenService.generateSessionToken();
+    // Use existing session ID for token refresh to maintain consistency
+    const { token } = tokenService.generateSessionTokenForId(req.sessionId);
     
     await sessionService.updateSession(req.sessionId, {
       lastAccessed: new Date().toISOString()

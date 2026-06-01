@@ -19,6 +19,7 @@ function App() {
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('upload');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [selectedDocument, setSelectedDocument] = useState('');
 
   // Check for existing session on mount
   useEffect(() => {
@@ -91,6 +92,7 @@ function App() {
       setLoading(true);
       const uploadedDoc = await documentAPI.uploadDocument(file);
       setDocuments(prev => [...prev, uploadedDoc.document]);
+      setSelectedDocument(uploadedDoc.document.documentId); // Auto-select new document
       setActiveTab('query');
       setError(null);
     } catch (err) {
@@ -153,6 +155,7 @@ function App() {
 
   const handleNewQuery = () => {
     setCurrentQuery(null);
+    // Keep selected document to maintain user context
     setActiveTab('query');
   };
 
@@ -164,6 +167,7 @@ function App() {
     setQueries([]);
     setCurrentQuery(null);
     setROIData(null);
+    setSelectedDocument(''); // Clear selected document
     setIsLoggedIn(false);
     setActiveTab('upload');
   };
@@ -322,6 +326,8 @@ function App() {
                 loading={loading}
                 currentQuery={currentQuery}
                 onNewQuery={handleNewQuery}
+                selectedDocument={selectedDocument}
+                onDocumentSelect={setSelectedDocument}
               />
             )}
             

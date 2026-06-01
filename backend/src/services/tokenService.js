@@ -46,6 +46,23 @@ class TokenService {
     return { token, sessionId };
   }
 
+  generateSessionTokenForId(sessionId) {
+    this.ensureInitialized();
+    
+    const tokenPayload = {
+      sessionId,
+      type: 'session'
+    };
+
+    const token = jwt.sign(tokenPayload, this.jwtSecret, {
+      algorithm: 'HS256',
+      expiresIn: `${this.sessionTimeout}m`
+    });
+
+    logger.info('Session token generated for existing session', { sessionId });
+    return { token, sessionId };
+  }
+
   verifyToken(token) {
     this.ensureInitialized();
     

@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import { MessageCircle, Send, FileText, Clock, DollarSign, Zap, Lightbulb, ArrowLeft } from 'lucide-react';
-import { formatCurrency, formatTime, formatPercentage } from '../utils/formatters';
+import { formatCurrency, formatTime, formatTokens, formatPercentage } from '../utils/formatters';
 
-const QueryInterface = ({ documents, onQuery, loading, currentQuery, onNewQuery }) => {
+const QueryInterface = ({ documents, onQuery, loading, currentQuery, onNewQuery, selectedDocument, onDocumentSelect }) => {
   const [queryText, setQueryText] = useState('');
-  const [selectedDocument, setSelectedDocument] = useState('');
   const [suggestions] = useState([
     'What is this document about?',
     'Who are the parties involved?',
@@ -62,7 +61,7 @@ const QueryInterface = ({ documents, onQuery, loading, currentQuery, onNewQuery 
         </label>
         <select
           value={selectedDocument}
-          onChange={(e) => setSelectedDocument(e.target.value)}
+          onChange={(e) => onDocumentSelect(e.target.value)}
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           disabled={loading || documents.length === 0}
         >
