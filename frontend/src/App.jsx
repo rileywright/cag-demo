@@ -8,6 +8,7 @@ import QueryInterface from './components/QueryInterface';
 import ResultsDisplay from './components/ResultsDisplay';
 import ROIDashboard from './components/ROIDashboard';
 import QueryHistory from './components/QueryHistory';
+import DocumentManager from './components/DocumentManager';
 
 function App() {
   const [session, setSession] = useState(null);
@@ -159,6 +160,41 @@ function App() {
     setActiveTab('query');
   };
 
+  const handleDeleteDocument = async (documentId) => {
+    try {
+      setLoading(true);
+      await documentAPI.deleteDocument(documentId);
+      setDocuments(prev => prev.filter(doc => doc.documentId !== documentId));
+      
+      // Clear selected document if it was the deleted one
+      if (selectedDocument === documentId) {
+        setSelectedDocument('');
+      }
+      
+      setError(null);
+    } catch (err) {
+      setError('Failed to delete document. Please try again.');
+      console.error('Document deletion error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteAllDocuments = async () => {
+    try {
+      setLoading(true);
+      await documentAPI.deleteAllDocuments();
+      setDocuments([]);
+      setSelectedDocument('');
+      setError(null);
+    } catch (err) {
+      setError('Failed to delete all documents. Please try again.');
+      console.error('Delete all documents error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleLogout = () => {
     localStorage.removeItem('sessionId');
     localStorage.removeItem('sessionToken');
@@ -289,6 +325,7 @@ function App() {
             <nav className="flex -mb-px">
               {[
                 { id: 'upload', label: 'Upload Documents', icon: Upload, disabled: false },
+                { id: 'documents', label: 'Manage Documents', icon: FileText, disabled: documents.length === 0 },
                 { id: 'query', label: 'Ask Questions', icon: MessageCircle, disabled: documents.length === 0 },
                 { id: 'results', label: 'Results', icon: FileText, disabled: queries.length === 0 },
                 { id: 'roi', label: 'ROI Analysis', icon: TrendingUp, disabled: queries.length === 0 },
@@ -317,6 +354,15 @@ function App() {
           <div className="p-6">
             {activeTab === 'upload' && (
               <DocumentUpload onUpload={handleDocumentUpload} loading={loading} />
+            )}
+            
+            {activeTab === 'documents' && (
+              <DocumentManager 
+                documents={documents}
+                onDeleteDocument={handleDeleteDocument}
+                onDeleteAllDocuments={handleDeleteAllDocuments}
+                loading={loading}
+              />
             )}
             
             {activeTab === 'query' && (

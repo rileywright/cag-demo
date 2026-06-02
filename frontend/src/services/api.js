@@ -87,6 +87,16 @@ export const documentAPI = {
     const response = await api.get('/api/documents');
     return response.data.data;
   },
+
+  deleteDocument: async (documentId) => {
+    const response = await api.delete(`/api/documents/${documentId}`);
+    return response.data;
+  },
+
+  deleteAllDocuments: async () => {
+    const response = await api.delete('/api/documents/all');
+    return response.data;
+  },
 };
 
 // CAG Query API
