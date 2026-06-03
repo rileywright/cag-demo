@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Trash2, FileText, AlertTriangle, CheckCircle } from 'lucide-react';
 import { formatTokens, formatTime } from '../utils/formatters';
+import CompressionMetrics from './CompressionMetrics';
 
 const DocumentManager = ({ documents, onDeleteDocument, onDeleteAllDocuments, loading }) => {
   const [deleteConfirm, setDeleteConfirm] = useState(null);
@@ -73,6 +74,7 @@ const DocumentManager = ({ documents, onDeleteDocument, onDeleteAllDocuments, lo
                   <span>
                     Uploaded {formatTime(new Date(doc.uploadedAt))}
                   </span>
+                  <CompressionMetrics compression={doc.compression} />
                 </div>
               </div>
               

@@ -252,6 +252,16 @@ class ROIService {
       roiCategories.push(this.calculateBasicTimeSavings(queryData));
     }
 
+    // Add token optimization savings if available
+    if (sessionData.tokenOptimization) {
+      roiCategories.push(this.calculateTokenOptimizationROI(sessionData, queryData));
+    }
+
+    // Add Headroom compression savings if available
+    if (sessionData.documents?.some(doc => doc.compression?.enabled) || sessionData.headroomStats) {
+      roiCategories.push(this.calculateHeadroomCompressionROI(sessionData, queryData));
+    }
+
     const totalMonthlyImpact = roiCategories.reduce((sum, category) => {
       // Only include specific monetary values we know are realistic
       const monetaryImpact = Object.entries(category.impact)
@@ -328,6 +338,135 @@ class ROIService {
     };
 
     return risks.reduce((score, risk) => score + (riskWeights[risk] || 0.1), 0) / risks.length || 0;
+  }
+
+  calculateTokenOptimizationROI(sessionData, queryData) {
+    const tokenSavings = sessionData.tokenOptimization?.totalTokenSavings || 0;
+    const tokensGenerated = sessionData.tokenOptimization?.tokensGenerated || 1;
+    const averageSavings = sessionData.tokenOptimization?.averageSavingsPerToken || 0;
+    
+    // Calculate bandwidth and storage savings
+    const bandwidthSavingsPerToken = averageSavings; // bytes saved per token
+    const monthlyTokens = tokensGenerated * 30; // estimate monthly usage
+    const monthlyBandwidthSavings = bandwidthSavingsPerToken * monthlyTokens;
+    
+    // Calculate storage savings (tokens stored in logs, cache, etc.)
+    const storageMultiplier = 3; // tokens stored in multiple places
+    const monthlyStorageSavings = monthlyBandwidthSavings * storageMultiplier;
+    
+    // Calculate cost savings (bandwidth costs ~$0.01/GB, storage costs ~$0.02/GB)
+    const bandwidthCostSavings = (monthlyBandwidthSavings / 1024 / 1024 / 1024) * 0.01;
+    const storageCostSavings = (monthlyStorageSavings / 1024 / 1024 / 1024) * 0.02;
+    
+    // Calculate performance improvement
+    const transmissionSpeedImprovement = (averageSavings / 300) * 100; // % faster transmission
+    const processingTimeSavings = transmissionSpeedImprovement * 0.1; // 10% of transmission time saved
+    
+    return {
+      category: 'Token Optimization',
+      metrics: {
+        tokenSavings: Math.round(tokenSavings),
+        tokensGenerated,
+        averageSavingsPerToken: Math.round(averageSavings * 10) / 10,
+        monthlyBandwidthSavings: Math.round(monthlyBandwidthSavings),
+        monthlyStorageSavings: Math.round(monthlyStorageSavings),
+        bandwidthCostSavings: Math.round(bandwidthCostSavings * 100) / 100,
+        storageCostSavings: Math.round(storageCostSavings * 100) / 100,
+        transmissionSpeedImprovement: Math.round(transmissionSpeedImprovement * 10) / 10,
+        processingTimeSavings: Math.round(processingTimeSavings * 10) / 10
+      },
+      financialImpact: {
+        monthlySavings: bandwidthCostSavings + storageCostSavings,
+        annualSavings: (bandwidthCostSavings + storageCostSavings) * 12,
+        valueOfSavedTime: processingTimeSavings * 100, // $100 per hour value
+        totalAnnualImpact: ((bandwidthCostSavings + storageCostSavings) * 12) + (processingTimeSavings * 100 * 12)
+      }
+    };
+  }
+
+  calculateHeadroomCompressionROI(sessionData, queryData) {
+    // Get compression statistics from documents or session
+    const documents = sessionData.documents || [];
+    let totalOriginalSize = 0;
+    let totalCompressedSize = 0;
+    let totalSavings = 0;
+    let documentsCompressed = 0;
+    
+    // Calculate compression statistics from documents
+    documents.forEach(doc => {
+      if (doc.compression && doc.compression.enabled) {
+        totalOriginalSize += doc.compression.originalSize;
+        totalCompressedSize += doc.compression.compressedSize;
+        totalSavings += doc.compression.savings;
+        documentsCompressed++;
+      }
+    });
+    
+    // Fallback to session-level stats if available
+    if (totalOriginalSize === 0 && sessionData.headroomStats) {
+      totalOriginalSize = sessionData.headroomStats.totalOriginalSize || 0;
+      totalCompressedSize = sessionData.headroomStats.totalCompressedSize || 0;
+      totalSavings = sessionData.headroomStats.totalSavings || 0;
+      documentsCompressed = sessionData.headroomStats.totalCompressed || 0;
+    }
+    
+    // Calculate average compression ratio
+    const averageCompressionRatio = totalOriginalSize > 0 ? 
+      ((totalOriginalSize - totalCompressedSize) / totalOriginalSize * 100) : 0;
+    
+    // Estimate monthly impact
+    const monthlyDocuments = this.assumptions.documentsPerMonth;
+    const averageDocumentSize = totalOriginalSize / Math.max(documentsCompressed, 1);
+    const monthlyOriginalSize = monthlyDocuments * averageDocumentSize;
+    const monthlyCompressedSize = monthlyDocuments * averageDocumentSize * (1 - averageCompressionRatio / 100);
+    const monthlySavings = monthlyOriginalSize - monthlyCompressedSize;
+    
+    // Calculate token savings (rough estimation: 4 chars per token)
+    const monthlyTokenSavings = Math.round(monthlySavings / 4);
+    const tokenCostSavings = monthlyTokenSavings * this.assumptions.cagCostPerToken;
+    
+    // Calculate bandwidth and storage savings
+    const bandwidthCostSavings = (monthlySavings / 1024 / 1024 / 1024) * 0.01; // $0.01/GB
+    const storageCostSavings = (monthlySavings / 1024 / 1024 / 1024) * 0.02; // $0.02/GB
+    
+    // Calculate performance improvements
+    const processingTimeReduction = averageCompressionRatio * 0.3; // 30% of compression ratio as time savings
+    const averageQueryTime = 3000; // 3 seconds average
+    const timeSavingsPerQuery = averageQueryTime * (processingTimeReduction / 100);
+    const monthlyTimeSavings = timeSavingsPerQuery * this.assumptions.queriesPerMonth;
+    
+    // Calculate value of time savings
+    const timeValuePerHour = this.assumptions.attorneyHourlyRate;
+    const monthlyTimeValue = (monthlyTimeSavings / 3600) * timeValuePerHour;
+    
+    // Total monthly savings
+    const totalMonthlySavings = tokenCostSavings + bandwidthCostSavings + storageCostSavings + monthlyTimeValue;
+    const totalAnnualSavings = totalMonthlySavings * 12;
+    
+    return {
+      category: 'Headroom AI Compression',
+      metrics: {
+        documentsCompressed,
+        averageCompressionRatio: Math.round(averageCompressionRatio * 10) / 10,
+        totalSavingsBytes: Math.round(totalSavings),
+        monthlySavingsBytes: Math.round(monthlySavings),
+        monthlyTokenSavings: Math.round(monthlyTokenSavings),
+        processingTimeReduction: Math.round(processingTimeReduction * 10) / 10,
+        monthlyTimeSavings: Math.round(monthlyTimeSavings / 1000) / 10, // in seconds
+        bandwidthCostSavings: Math.round(bandwidthCostSavings * 100) / 100,
+        storageCostSavings: Math.round(storageCostSavings * 100) / 100,
+        tokenCostSavings: Math.round(tokenCostSavings * 100) / 100,
+        monthlyTimeValue: Math.round(monthlyTimeValue),
+        totalMonthlySavings: Math.round(totalMonthlySavings),
+        totalAnnualSavings: Math.round(totalAnnualSavings)
+      },
+      description: `AI-powered document compression reduces storage and processing costs by ${averageCompressionRatio.toFixed(1)}% while maintaining quality`,
+      impact: {
+        level: averageCompressionRatio > 50 ? 'High' : averageCompressionRatio > 25 ? 'Medium' : 'Low',
+        confidence: 85,
+        timeframe: 'Immediate'
+      }
+    };
   }
 
   calculateDifferentiationScore(performanceData) {

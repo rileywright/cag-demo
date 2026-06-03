@@ -206,6 +206,119 @@ class CAGService {
     }
   }
 
+  async processOptimizedQuery(sessionId, documentId, query, cachedDocument) {
+    try {
+      this.totalQueries++;
+      const queryStartTime = Date.now();
+
+      logger.info('Processing optimized CAG query', {
+        sessionId,
+        documentId,
+        queryLength: query.length,
+        documentTokenCount: cachedDocument.tokenCount
+      });
+
+      // Smart filtering - extract only relevant sections
+      const filteredContent = this.extractRelevantContent(cachedDocument.text, query);
+      const filteredTokens = this.estimateTokenCount(filteredContent);
+
+      logger.info('Smart filtering applied', {
+        originalTokens: cachedDocument.tokenCount,
+        filteredTokens,
+        reductionPercent: ((1 - filteredTokens / cachedDocument.tokenCount) * 100).toFixed(1)
+      });
+
+      // Use optimized content for analysis
+      const analysis = await anthropicService.analyzeWithPromptCaching(
+        filteredContent,
+        filteredTokens,
+        query,
+        cachedDocument.metadata
+      );
+
+      const queryTime = Date.now() - queryStartTime;
+      
+      // Calculate cost savings
+      const cachedTokensUsed = filteredTokens || 0;
+      const newTokensUsed = analysis.metadata.inputTokens - cachedTokensUsed;
+      const cachedTokenCost = cachedTokensUsed * this.costPerInputToken;
+      const newTokenCost = newTokensUsed * this.costPerInputToken;
+      const totalCost = analysis.metadata.cost.totalCost || analysis.metadata.cost;
+      
+      const costSavings = {
+        cachedTokensUsed,
+        newTokensUsed,
+        cachedTokenCost,
+        newTokenCost,
+        totalCost,
+        savingsPercent: ((cachedTokenCost + newTokenCost) / totalCost * 100).toFixed(2)
+      };
+
+      const enhancedMetadata = {
+        ...analysis.metadata,
+        queryTime,
+        fromCache: false,
+        optimization: {
+          enabled: true,
+          originalTokens: cachedDocument.tokenCount,
+          filteredTokens,
+          tokenReduction: ((1 - filteredTokens / cachedDocument.tokenCount) * 100).toFixed(1)
+        }
+      };
+
+      logger.info('Optimized CAG query completed', {
+        sessionId,
+        cachedTokensUsed,
+        newTokensUsed,
+        totalCost,
+        tokenReduction: enhancedMetadata.optimization.tokenReduction,
+        savingsPercent: costSavings.savingsPercent
+      });
+
+      return {
+        response: analysis.response,
+        metadata: enhancedMetadata,
+        costSavings
+      };
+    } catch (error) {
+      logger.error('Optimized CAG query processing failed:', error);
+      throw error;
+    }
+  }
+
+  extractRelevantContent(documentText, query) {
+    // Simple keyword-based relevance filtering
+    const queryWords = query.toLowerCase().split(/\s+/).filter(word => word.length > 3);
+    const sentences = documentText.split(/[.!?]+/);
+    
+    const relevantSentences = sentences.filter(sentence => {
+      const sentenceLower = sentence.toLowerCase();
+      return queryWords.some(word => sentenceLower.includes(word)) || 
+             sentenceLower.includes('contract') || 
+             sentenceLower.includes('agreement') ||
+             sentenceLower.includes('party') ||
+             sentenceLower.includes('obligation') ||
+             sentenceLower.includes('liability') ||
+             sentenceLower.includes('term') ||
+             sentenceLower.includes('condition');
+    });
+
+    // Always include some context - take surrounding sentences too
+    const relevantContent = relevantSentences.join('. ') + '.';
+    
+    // Ensure we have enough content but not too much
+    if (relevantContent.length < 200) {
+      return documentText.substring(0, Math.min(1000, documentText.length));
+    }
+    
+    return relevantContent.substring(0, Math.min(2000, relevantContent.length));
+  }
+
+  estimateTokenCount(text) {
+    // Rough estimation: ~4 characters per token
+    return Math.ceil(text.length / 4);
+  }
+
   async cacheResponse(queryHash, response, originalQuery, context) {
     try {
       const cacheMetadata = {

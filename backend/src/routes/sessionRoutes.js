@@ -151,13 +151,14 @@ router.post('/create', sessionCreationLimiter, [
       createdAt: new Date().toISOString()
     };
 
-    await sessionService.createSession(sessionId, sessionData);
+    await sessionService.createSession(sessionId, sessionData, 0); // Initial session has no token savings yet
 
     logger.info('User session created', {
       sessionId,
       username,
       ip: req.ip,
-      userAgent: req.get('User-Agent')
+      userAgent: req.get('User-Agent'),
+      tokenSavings: 0
     });
 
     res.status(201).json({
@@ -265,10 +266,17 @@ router.post('/login', sessionCreationLimiter, [
       token = tokenResult.token;
       sessionData = existingSession;
       
+      // Update session with new token optimization data
+      if (tokenResult.savings) {
+        await sessionService.updateSessionOptimization(sessionId, tokenResult.savings);
+      }
+      
       logger.info('User logged in with existing session', {
         sessionId,
         username,
-        existingDocuments: existingSession.documents?.length || 0
+        existingDocuments: existingSession.documents?.length || 0,
+        tokenSavings: tokenResult.savings,
+        tokenSize: tokenResult.tokenSize
       });
     } else {
       // Create new session
@@ -293,11 +301,12 @@ router.post('/login', sessionCreationLimiter, [
         createdAt: new Date().toISOString()
       };
 
-      await sessionService.createSession(sessionId, sessionData);
+      await sessionService.createSession(sessionId, sessionData, tokenResult.savings || 0);
       
       logger.info('User created new session', {
         sessionId,
-        username
+        username,
+        tokenSavings: tokenResult.savings || 0
       });
     }
 

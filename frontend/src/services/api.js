@@ -101,11 +101,12 @@ export const documentAPI = {
 
 // CAG Query API
 export const cagAPI = {
-  queryDocument: async (query, documentId, includeComparison = false) => {
+  queryDocument: async (query, documentId, isOptimized = false) => {
     const response = await api.post('/api/cag/query', {
       query,
       documentId,
-      includeComparison,
+      isOptimized,
+      includeComparison: isOptimized, // Enable comparison when optimized mode is on
     });
     return response.data;
   },

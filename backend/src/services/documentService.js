@@ -5,6 +5,7 @@ import path from 'path';
 import logger from '../utils/logger.js';
 import anthropicService from './anthropicService.js';
 import cacheService from './cacheService.js';
+import documentProcessorService from './documentProcessorService.js';
 
 class DocumentService {
   constructor() {
@@ -242,14 +243,34 @@ class DocumentService {
         global.gc();
       }
 
+      // First extract raw text using existing method
       const documentInfo = await this.extractTextFromFile(buffer, originalName, mimetype);
       this.validateDocumentContent(documentInfo.text);
       
-      // PURE CAG - Tokenize and cache the document
-      const processedText = documentInfo.text; // Complete text, no truncation
+      // Process with Python document processor for cleaning and compression
+      logger.info('Processing document with Python API');
+      const processingResult = await documentProcessorService.processDocument(buffer, originalName, mimetype);
       
-      // Tokenize the document using Anthropic tokenizer
-      logger.info('Tokenizing document for CAG cache');
+      let processedText = documentInfo.text;
+      let compressionResult = null;
+      
+      if (processingResult.success) {
+        processedText = processingResult.processedText;
+        compressionResult = processingResult.metrics;
+        
+        logger.info('Document processing successful', {
+          originalSize: compressionResult.original.size_bytes,
+          processedSize: compressionResult.processed.size_bytes,
+          tokenCompression: compressionResult.compression.token_compression_percent
+        });
+      } else {
+        logger.warn('Document processing failed, using original text', {
+          error: processingResult.error
+        });
+      }
+      
+      // Tokenize the processed document using Anthropic tokenizer
+      logger.info('Tokenizing processed document for CAG cache');
       const tokenizationResult = await anthropicService.tokenizeText(processedText);
       
       // Create document ID and hash
@@ -267,6 +288,21 @@ class DocumentService {
         hash: documentHash,
         pages: documentInfo.pages,
         processedAt: new Date().toISOString(),
+        compression: compressionResult ? {
+          enabled: compressionResult.success,
+          originalSize: compressionResult.originalSize,
+          compressedSize: compressionResult.compressedSize,
+          compressionRatio: compressionResult.compressionRatio,
+          savings: compressionResult.savings,
+          processingTime: compressionResult.processingTime
+        } : {
+          enabled: false,
+          originalSize: documentInfo.text.length,
+          compressedSize: documentInfo.text.length,
+          compressionRatio: 0,
+          savings: 0,
+          processingTime: 0
+        },
         metadata: {
           title: 'Document',
           parties: [],
@@ -297,7 +333,28 @@ class DocumentService {
         processedAt: cacheData.processedAt,
         statistics: cacheData.statistics,
         tokenCount: tokenizationResult.tokenCount,
-        cached: true
+        cached: true,
+        compression: compressionResult ? {
+          enabled: true,
+          originalSize: compressionResult.original.size_bytes,
+          compressedSize: compressionResult.processed.size_bytes,
+          compressionRatio: compressionResult.compression.size_compression_percent / 100,
+          savings: compressionResult.compression.token_savings,
+          processingTime: compressionResult.compression.processing_time_ms,
+          tokenCompression: compressionResult.compression.token_compression_percent,
+          costSavings: compressionResult.compression.cost_savings_usd,
+          roi: compressionResult.roi
+        } : {
+          enabled: false,
+          originalSize: documentInfo.text.length,
+          compressedSize: documentInfo.text.length,
+          compressionRatio: 0,
+          savings: 0,
+          processingTime: 0,
+          tokenCompression: 0,
+          costSavings: 0,
+          roi: null
+        }
       };
 
       logger.info('Document processed and cached successfully', {

@@ -21,6 +21,8 @@ function App() {
   const [activeTab, setActiveTab] = useState('upload');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState('');
+  const [isHeadroomEnabled, setIsHeadroomEnabled] = useState(false);
+  const [headroomStats, setHeadroomStats] = useState(null);
 
   // Check for existing session on mount
   useEffect(() => {
@@ -45,6 +47,10 @@ function App() {
       const sessionData = await authAPI.getSessionStatus();
       setSession(sessionData.session);
       setIsLoggedIn(true);
+      
+      // Load Headroom state from session
+      setIsHeadroomEnabled(sessionData.session?.headroomEnabled || false);
+      
       await loadCachedDocuments();
     } catch (err) {
       // Session invalid, clear and show login
@@ -62,6 +68,9 @@ function App() {
       localStorage.setItem('sessionId', sessionData.sessionId);
       localStorage.setItem('sessionToken', sessionData.token);
       setIsLoggedIn(true);
+      
+      // Load Headroom state from session
+      setIsHeadroomEnabled(sessionData?.headroomEnabled || false);
       
       // Load cached documents if they exist
       await loadCachedDocuments();
@@ -104,12 +113,12 @@ function App() {
     }
   };
 
-  const handleQuery = async (queryText, documentId) => {
+  const handleQuery = async (queryText, documentId, isOptimized = false) => {
     try {
       setLoading(true);
       setCurrentQuery({ query: queryText, status: 'processing' });
       
-      const response = await cagAPI.queryDocument(queryText, documentId);
+      const response = await cagAPI.queryDocument(queryText, documentId, isOptimized);
       
       // Calculate ROI for this query
       const roiCalculation = await roiAPI.calculateROI({
@@ -131,7 +140,8 @@ function App() {
         responseTime: response.data.metadata.queryTime,
         costAnalysis: response.costAnalysis,
         roi: roiCalculation,
-        status: 'completed'
+        status: 'completed',
+        comparison: isOptimized ? response.data.comparison : null
       };
       
       setQueries(prev => [queryResult, ...prev]);
@@ -151,6 +161,36 @@ function App() {
       setActiveTab('query'); // Stay on query tab if there's an error
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleHeadroomToggle = async (enabled) => {
+    try {
+      setIsHeadroomEnabled(enabled);
+      
+      // Call backend to toggle Headroom
+      const response = await fetch('/api/headroom/toggle', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.token}`
+        },
+        body: JSON.stringify({ enabled })
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setHeadroomStats(data.stats);
+        
+        // Update documents to show compression info
+        if (enabled) {
+          // Refresh documents to show compression data
+          await loadDocuments();
+        }
+      }
+    } catch (error) {
+      console.error('Failed to toggle Headroom:', error);
+      setError('Failed to toggle Headroom compression');
     }
   };
 
@@ -374,6 +414,9 @@ function App() {
                 onNewQuery={handleNewQuery}
                 selectedDocument={selectedDocument}
                 onDocumentSelect={setSelectedDocument}
+                headroomStats={headroomStats}
+                isHeadroomEnabled={isHeadroomEnabled}
+                onHeadroomToggle={handleHeadroomToggle}
               />
             )}
             

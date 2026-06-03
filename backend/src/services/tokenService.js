@@ -33,8 +33,8 @@ class TokenService {
     
     const sessionId = crypto.randomUUID();
     const tokenPayload = {
-      sessionId,
-      type: 'session'
+      sid: sessionId,  // Shortened field name
+      // Removed 'type' field - all tokens are session tokens
     };
 
     const token = jwt.sign(tokenPayload, this.jwtSecret, {
@@ -42,16 +42,28 @@ class TokenService {
       expiresIn: `${this.sessionTimeout}m`
     });
 
-    logger.info('Session token generated', { sessionId });
-    return { token, sessionId };
+    // Calculate token size for optimization tracking
+    const tokenSize = Buffer.byteLength(token, 'utf8');
+    const unoptimizedSize = this.calculateUnoptimizedTokenSize();
+    const savings = unoptimizedSize - tokenSize;
+    const savingsPercent = ((savings / unoptimizedSize) * 100).toFixed(2);
+
+    logger.info('Session token generated', { 
+      sessionId, 
+      tokenSize,
+      unoptimizedSize,
+      savings,
+      savingsPercent: `${savingsPercent}%`
+    });
+    return { token, sessionId, tokenSize, savings };
   }
 
   generateSessionTokenForId(sessionId) {
     this.ensureInitialized();
     
     const tokenPayload = {
-      sessionId,
-      type: 'session'
+      sid: sessionId,  // Shortened field name
+      // Removed 'type' field - all tokens are session tokens
     };
 
     const token = jwt.sign(tokenPayload, this.jwtSecret, {
@@ -59,8 +71,33 @@ class TokenService {
       expiresIn: `${this.sessionTimeout}m`
     });
 
-    logger.info('Session token generated for existing session', { sessionId });
-    return { token, sessionId };
+    // Calculate token size for optimization tracking
+    const tokenSize = Buffer.byteLength(token, 'utf8');
+    const unoptimizedSize = this.calculateUnoptimizedTokenSize();
+    const savings = unoptimizedSize - tokenSize;
+    const savingsPercent = ((savings / unoptimizedSize) * 100).toFixed(2);
+
+    logger.info('Session token generated for existing session', { 
+      sessionId, 
+      tokenSize,
+      unoptimizedSize,
+      savings,
+      savingsPercent: `${savingsPercent}%`
+    });
+    return { token, sessionId, tokenSize, savings };
+  }
+
+  calculateUnoptimizedTokenSize() {
+    // Calculate size of unoptimized token for comparison
+    const unoptimizedPayload = {
+      sessionId: crypto.randomUUID(),  // Full field name
+      type: 'session'                  // Include type field
+    };
+    const unoptimizedToken = jwt.sign(unoptimizedPayload, this.jwtSecret, {
+      algorithm: 'HS256',
+      expiresIn: `${this.sessionTimeout}m`
+    });
+    return Buffer.byteLength(unoptimizedToken, 'utf8');
   }
 
   verifyToken(token) {
@@ -71,9 +108,13 @@ class TokenService {
         algorithms: ['HS256']
       });
 
-      if (decoded.type !== 'session') {
-        throw new Error('Invalid token type');
+      // Map shortened field name back to original for compatibility
+      if (decoded.sid) {
+        decoded.sessionId = decoded.sid;
+        delete decoded.sid;
       }
+
+      // Removed type check - all tokens are session tokens
 
       return decoded;
     } catch (error) {

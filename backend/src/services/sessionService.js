@@ -62,8 +62,8 @@ class SessionService {
     }
   }
 
-  async createSession(sessionId, sessionData) {
-    logger.info('Creating session', { sessionId, isConnected: this.isConnected });
+  async createSession(sessionId, sessionData, tokenSavings = 0) {
+    logger.info('Creating session', { sessionId, isConnected: this.isConnected, tokenSavings });
     
     if (!this.isConnected) {
       logger.error('Redis not connected during session creation');
@@ -76,7 +76,12 @@ class SessionService {
         ...sessionData,
         createdAt: new Date().toISOString(),
         lastAccessed: new Date().toISOString(),
-        isActive: true
+        isActive: true,
+        tokenOptimization: {
+          totalTokenSavings: tokenSavings,
+          tokensGenerated: 1,
+          averageSavingsPerToken: tokenSavings
+        }
       };
 
       await Promise.race([
@@ -90,7 +95,11 @@ class SessionService {
         )
       ]);
 
-      logger.info('Session created', { sessionId });
+      logger.info('Session created', { 
+        sessionId, 
+        tokenSavings,
+        sessionSize: Buffer.byteLength(JSON.stringify(session), 'utf8')
+      });
       return session;
     } catch (error) {
       logger.error('Failed to create session:', error);
@@ -252,6 +261,54 @@ class SessionService {
 
   isRedisConnected() {
     return this.isConnected;
+  }
+
+  async updateSessionOptimization(sessionId, additionalSavings) {
+    if (!this.isConnected) {
+      throw new Error('Redis not connected');
+    }
+
+    try {
+      const sessionKey = `session:${sessionId}`;
+      const sessionData = await this.client.get(sessionKey);
+      
+      if (!sessionData) {
+        logger.warn('Session not found for optimization update', { sessionId });
+        return;
+      }
+
+      const session = JSON.parse(sessionData);
+      
+      // Update token optimization metrics
+      if (!session.tokenOptimization) {
+        session.tokenOptimization = {
+          totalTokenSavings: 0,
+          tokensGenerated: 0,
+          averageSavingsPerToken: 0
+        };
+      }
+      
+      session.tokenOptimization.totalTokenSavings += additionalSavings;
+      session.tokenOptimization.tokensGenerated += 1;
+      session.tokenOptimization.averageSavingsPerToken = 
+        session.tokenOptimization.totalTokenSavings / session.tokenOptimization.tokensGenerated;
+      
+      session.lastAccessed = new Date().toISOString();
+      
+      await this.client.setEx(sessionKey, this.sessionTimeout * 60, JSON.stringify(session));
+      
+      logger.info('Session optimization updated', {
+        sessionId,
+        additionalSavings,
+        totalSavings: session.tokenOptimization.totalTokenSavings,
+        tokensGenerated: session.tokenOptimization.tokensGenerated
+      });
+      
+      return session;
+    } catch (error) {
+      logger.error('Failed to update session optimization:', error);
+      throw new Error('Session optimization update failed');
+    }
   }
 
   async findUserSession(username, userHash) {

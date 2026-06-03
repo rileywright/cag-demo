@@ -21,6 +21,7 @@ import sessionService from './services/sessionService.js';
 import tokenService from './services/tokenService.js';
 import cagService from './services/cagService.js';
 import roiService from './services/roiService.js';
+import documentProcessorService from './services/documentProcessorService.js';
 import sessionRoutes from './routes/sessionRoutes.js';
 import documentRoutes from './routes/documentRoutes.js';
 import cagRoutes from './routes/cagRoutes.js';
@@ -100,12 +101,14 @@ try {
   await sessionService.connect();
   tokenService.initialize();
   await cagService.initialize();
+  await documentProcessorService.initialize();
 
   const server = app.listen(PORT, HOST, () => {
     logger.info(`Server running in ${env.NODE_ENV} mode on ${HOST}:${PORT}`);
     logger.info('Security middleware initialized');
     logger.info('Session management initialized');
     logger.info('Document processing initialized');
+    logger.info('Python document processor initialized');
     logger.info('CAG system initialized');
     logger.info('ROI tracking initialized');
     logger.info('API endpoints available');

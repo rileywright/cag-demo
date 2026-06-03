@@ -1,9 +1,13 @@
 import { useState } from 'react';
 import { MessageCircle, Send, FileText, Clock, DollarSign, Zap, Lightbulb, ArrowLeft } from 'lucide-react';
 import { formatCurrency, formatTime, formatTokens, formatPercentage } from '../utils/formatters';
+import OptimizationToggle from './OptimizationToggle';
+import ComparisonDisplay from './ComparisonDisplay';
+import HeadroomToggle from './HeadroomToggle';
 
-const QueryInterface = ({ documents, onQuery, loading, currentQuery, onNewQuery, selectedDocument, onDocumentSelect }) => {
+const QueryInterface = ({ documents, onQuery, loading, currentQuery, onNewQuery, selectedDocument, onDocumentSelect, headroomStats, isHeadroomEnabled, onHeadroomToggle }) => {
   const [queryText, setQueryText] = useState('');
+  const [isOptimized, setIsOptimized] = useState(false);
   const [suggestions] = useState([
     'What is this document about?',
     'Who are the parties involved?',
@@ -24,7 +28,7 @@ const QueryInterface = ({ documents, onQuery, loading, currentQuery, onNewQuery,
       return;
     }
     
-    onQuery(queryText.trim(), selectedDocument);
+    onQuery(queryText.trim(), selectedDocument, isOptimized);
   };
 
   const handleSuggestionClick = (suggestion) => {
@@ -79,6 +83,22 @@ const QueryInterface = ({ documents, onQuery, loading, currentQuery, onNewQuery,
           </p>
         )}
       </div>
+
+      {/* Headroom AI Toggle */}
+      <HeadroomToggle
+        isHeadroomEnabled={isHeadroomEnabled}
+        onToggle={onHeadroomToggle}
+        loading={loading}
+        compressionStats={headroomStats}
+      />
+
+      {/* Optimization Toggle */}
+      <OptimizationToggle
+        isOptimized={isOptimized}
+        onToggle={setIsOptimized}
+        loading={loading}
+        estimatedSavings={0.0021} // Estimated savings per query
+      />
 
       {/* Query Input */}
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -210,6 +230,15 @@ const QueryInterface = ({ documents, onQuery, loading, currentQuery, onNewQuery,
             </div>
           </div>
         </div>
+      )}
+
+      {/* Comparison Display */}
+      {currentQuery && currentQuery.status === 'completed' && currentQuery.comparison && (
+        <ComparisonDisplay
+          standardResult={currentQuery}
+          optimizedResult={currentQuery.comparison.optimizedResult}
+          loading={loading}
+        />
       )}
 
       {/* Tips */}

@@ -150,11 +150,16 @@ router.post('/upload',
         await cacheService.connect(sessionService.client);
       }
       
+      // Check if Headroom is enabled in session
+      const session = await sessionService.getSession(req.sessionId);
+      const isHeadroomEnabled = session?.headroomEnabled || false;
+      
       const processedDocument = await documentService.processDocument(
         processedFile.buffer,
         processedFile.originalName,
         processedFile.mimetype,
-        req.sessionId
+        req.sessionId,
+        isHeadroomEnabled
       );
 
       const document = {
@@ -169,7 +174,8 @@ router.post('/upload',
         pages: processedDocument.pages,
         tokenCount: processedDocument.tokenCount,
         cached: processedDocument.cached,
-        model: processedDocument.model
+        model: processedDocument.model,
+        compression: processedDocument.compression
       };
 
       const updatedSession = await sessionService.updateSession(req.sessionId, {

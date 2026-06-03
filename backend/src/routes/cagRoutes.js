@@ -84,7 +84,11 @@ router.post('/query',
     body('includeComparison')
       .optional()
       .isBoolean()
-      .withMessage('includeComparison must be a boolean')
+      .withMessage('includeComparison must be a boolean'),
+    body('isOptimized')
+      .optional()
+      .isBoolean()
+      .withMessage('isOptimized must be a boolean')
   ],
   errorHandler.async(async (req, res) => {
     try {
@@ -97,7 +101,7 @@ router.post('/query',
         });
       }
 
-      const { query, documentId, includeComparison = false } = req.body;
+      const { query, documentId, includeComparison = false, isOptimized = false } = req.body;
       
       let cachedDocument = null;
       
@@ -132,17 +136,47 @@ router.post('/query',
       }
 
       let result;
-      if (includeComparison) {
-        // Use comparison method (existing functionality)
-        result = await cagService.compareApproaches(
+      let optimizedResult = null;
+      
+      if (isOptimized || includeComparison) {
+        // Run optimized processing
+        optimizedResult = await cagService.processOptimizedQuery(
           req.sessionId,
           documentId,
           query,
-          cachedDocument.text,
-          cachedDocument.metadata
+          cachedDocument
         );
+      }
+      
+      if (includeComparison) {
+        // Run standard processing for comparison
+        const standardResult = await cagService.processQueryWithCaching(
+          req.sessionId,
+          documentId,
+          query,
+          cachedDocument
+        );
+        
+        result = {
+          ...standardResult,
+          comparison: {
+            standardResult: {
+              response: standardResult.response,
+              metadata: standardResult.metadata,
+              costAnalysis: standardResult.costSavings
+            },
+            optimizedResult: {
+              response: optimizedResult.response,
+              metadata: optimizedResult.metadata,
+              costAnalysis: optimizedResult.costSavings
+            }
+          }
+        };
+      } else if (isOptimized) {
+        // Use optimized result as primary
+        result = optimizedResult;
       } else {
-        // Use new CAG method with cost analysis
+        // Use standard processing
         result = await cagService.processQueryWithCaching(
           req.sessionId,
           documentId,
