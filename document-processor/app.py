@@ -24,24 +24,167 @@ class DocumentProcessor:
         self.chars_per_token = 4
     
     def clean_text(self, text):
-        """Clean extracted text by normalizing whitespace and removing artifacts"""
+        """Advanced text cleaning for maximum compression"""
         if not text:
             return ""
         
-        # Remove excessive whitespace
-        text = re.sub(r'\s+', ' ', text)
+        # Phase 1: Remove document structure artifacts
+        text = self._remove_document_artifacts(text)
         
-        # Remove common document artifacts
-        text = re.sub(r'Page \d+ of \d+', '', text)
-        text = re.sub(r'\f', '', text)  # Form feeds
+        # Phase 2: Normalize whitespace
+        text = self._normalize_whitespace(text)
         
-        # Clean up bullet points and numbering
-        text = re.sub(r'^\s*[\•\-\*\d]+\.\s*', '', text, flags=re.MULTILINE)
+        # Phase 3: Remove redundant content
+        text = self._remove_redundant_content(text)
         
-        # Remove multiple consecutive newlines
-        text = re.sub(r'\n\s*\n', '\n', text)
+        # Phase 4: Optimize legal document structure
+        text = self._optimize_legal_structure(text)
+        
+        # Phase 5: Final cleanup
+        text = self._final_cleanup(text)
         
         return text.strip()
+    
+    def _remove_document_artifacts(self, text):
+        """Remove headers, footers, page numbers, and formatting artifacts"""
+        # Page numbers and pagination
+        text = re.sub(r'Page \d+ of \d+', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'Page \d+', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'\d+ of \d+', '', text)
+        text = re.sub(r'\f', '', text)  # Form feeds
+        
+        # Headers and footers (common patterns)
+        text = re.sub(r'^.*?CONFIDENTIAL.*?$', '', text, flags=re.MULTILINE | re.IGNORECASE)
+        text = re.sub(r'^.*?DRAFT.*?$', '', text, flags=re.MULTILINE | re.IGNORECASE)
+        text = re.sub(r'^.*?Page \d+.*?$', '', text, flags=re.MULTILINE | re.IGNORECASE)
+        
+        # File paths and URLs
+        text = re.sub(r'\b\w:[\\\/][\w\\\/.-]*', '', text)  # Windows paths
+        text = re.sub(r'\b\/[\w\/.-]*', '', text)  # Unix paths
+        text = re.sub(r'https?:\/\/[\w\.-\/\?=&%]+', '', text)  # URLs
+        
+        # Email addresses
+        text = re.sub(r'\b[\w\.-]+@[\w\.-]+\.\w+\b', '', text)
+        
+        # Phone numbers
+        text = re.sub(r'\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b', '', text)
+        text = re.sub(r'\b\(\d{3}\)\s*\d{3}[-.\s]?\d{4}\b', '', text)
+        
+        return text
+    
+    def _normalize_whitespace(self, text):
+        """Normalize all whitespace to single spaces"""
+        # Replace tabs and multiple spaces with single space
+        text = re.sub(r'[ \t]+', ' ', text)
+        
+        # Replace multiple newlines with single newline
+        text = re.sub(r'\n\s*\n+', '\n', text)
+        
+        # Remove leading/trailing whitespace from lines
+        text = '\n'.join(line.strip() for line in text.split('\n'))
+        
+        return text
+    
+    def _remove_redundant_content(self, text):
+        """Remove redundant and repetitive content"""
+        # Remove duplicate consecutive lines
+        lines = text.split('\n')
+        cleaned_lines = []
+        prev_line = None
+        
+        for line in lines:
+            if line.strip() and line.strip() != prev_line:
+                cleaned_lines.append(line)
+                prev_line = line.strip()
+            elif not line.strip():  # Keep blank lines for structure
+                cleaned_lines.append(line)
+                prev_line = None
+        
+        text = '\n'.join(cleaned_lines)
+        
+        # Remove repetitive legal boilerplate
+        boilerplate_patterns = [
+            r'This agreement is made and entered into.*?\.',
+            r'IN WITNESS WHEREOF.*?have executed this agreement.*?\.',
+            r'All rights reserved.*?\.',
+            r'Copyright © \d{4}.*?All rights reserved',
+            r'Confidential.*?proprietary.*?information',
+            r'Terms and Conditions.*?effective date',
+            r'Please read.*?carefully.*?terms',
+        ]
+        
+        for pattern in boilerplate_patterns:
+            text = re.sub(pattern, '', text, flags=re.IGNORECASE | re.DOTALL)
+        
+        # Remove excessive punctuation
+        text = re.sub(r'[.]{3,}', '.', text)  # Multiple periods
+        text = re.sub(r'[!?]{2,}', '!', text)  # Multiple exclamation/question marks
+        
+        return text
+    
+    def _optimize_legal_structure(self, text):
+        """Optimize legal document structure for compression"""
+        # Standardize section numbering
+        text = re.sub(r'^(\d+\.?\s*)', r'\1', text, flags=re.MULTILINE)
+        text = re.sub(r'^([A-Za-z]\.?\s*)', r'\1', text, flags=re.MULTILINE)
+        
+        # Remove empty numbered sections
+        text = re.sub(r'^\d+\.\s*\n', '', text, flags=re.MULTILINE)
+        text = re.sub(r'^[A-Za-z]\.\s*\n', '', text, flags=re.MULTILINE)
+        
+        # Consolidate short lines (likely fragments)
+        lines = text.split('\n')
+        consolidated_lines = []
+        
+        for i, line in enumerate(lines):
+            if len(line.strip()) < 30 and i > 0:  # Short line, likely fragment
+                # Append to previous line if it's not too long
+                if len(consolidated_lines[-1]) < 100:
+                    consolidated_lines[-1] += ' ' + line.strip()
+                else:
+                    consolidated_lines.append(line)
+            else:
+                consolidated_lines.append(line)
+        
+        text = '\n'.join(consolidated_lines)
+        
+        # Remove common legal phrases that don't add value
+        legal_noise_patterns = [
+            r'hereby agrees to',
+            r'shall be deemed to',
+            r'including but not limited to',
+            r'without limitation',
+            r'including, without limitation',
+            r'for the avoidance of doubt',
+            r'it is understood and agreed',
+            r'notwithstanding the foregoing',
+            r'subject to the foregoing',
+        ]
+        
+        for pattern in legal_noise_patterns:
+            text = re.sub(r'\b' + pattern + r'\b', '', text, flags=re.IGNORECASE)
+        
+        return text
+    
+    def _final_cleanup(self, text):
+        """Final cleanup and optimization"""
+        # Remove bullet points and numbering (after structure optimization)
+        text = re.sub(r'^\s*[\•\-\*\d]+\.\s*', '', text, flags=re.MULTILINE)
+        text = re.sub(r'^\s*\([a-z]\)\s*', '', text, flags=re.MULTILINE)
+        text = re.sub(r'^\s*\([A-Z]\)\s*', '', text, flags=re.MULTILINE)
+        
+        # Clean up spacing around punctuation
+        text = re.sub(r'\s+([,.!?;:])', r'\1', text)
+        text = re.sub(r'([,.!?;:])\s+', r'\1 ', text)
+        
+        # Remove single-character lines
+        text = '\n'.join(line for line in text.split('\n') if len(line.strip()) > 1)
+        
+        # Final whitespace cleanup
+        text = re.sub(r'\n\s*\n\s*\n', '\n\n', text)  # Max 2 consecutive newlines
+        text = re.sub(r' +', ' ', text)  # Single spaces only
+        
+        return text
     
     def extract_text_from_pdf(self, pdf_content):
         """Extract text from PDF using pdfplumber"""
