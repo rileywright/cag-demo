@@ -124,10 +124,6 @@ class DocumentProcessor:
     
     def _optimize_legal_structure(self, text):
         """Optimize legal document structure for compression"""
-        # Standardize section numbering
-        text = re.sub(r'^(\d+\.?\s*)', r'\1', text, flags=re.MULTILINE)
-        text = re.sub(r'^([A-Za-z]\.?\s*)', r'\1', text, flags=re.MULTILINE)
-        
         # Remove empty numbered sections
         text = re.sub(r'^\d+\.\s*\n', '', text, flags=re.MULTILINE)
         text = re.sub(r'^[A-Za-z]\.\s*\n', '', text, flags=re.MULTILINE)
@@ -136,8 +132,12 @@ class DocumentProcessor:
         lines = text.split('\n')
         consolidated_lines = []
         
+        # Consolidate short lines (likely fragments)
+        lines = text.split('\n')
+        consolidated_lines = []
+        
         for i, line in enumerate(lines):
-            if len(line.strip()) < 30 and i > 0:  # Short line, likely fragment
+            if len(line.strip()) < 30 and i > 0 and consolidated_lines:  # Short line, likely fragment
                 # Append to previous line if it's not too long
                 if len(consolidated_lines[-1]) < 100:
                     consolidated_lines[-1] += ' ' + line.strip()
@@ -145,10 +145,6 @@ class DocumentProcessor:
                     consolidated_lines.append(line)
             else:
                 consolidated_lines.append(line)
-        
-        text = '\n'.join(consolidated_lines)
-        
-        # Remove common legal phrases that don't add value
         legal_noise_patterns = [
             r'hereby agrees to',
             r'shall be deemed to',
