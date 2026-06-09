@@ -2,7 +2,7 @@ import { TrendingUp, DollarSign, Clock, Zap, Target, Calendar, BarChart3, PieCha
 import { formatCurrency, formatTime, formatPercentage, formatTokens } from '../utils/formatters';
 
 const ROIDashboard = ({ roiData, queries }) => {
-  if (!roiData && queries.length === 0) {
+  if (!roiData) {
     return (
       <div className="text-center py-12">
         <TrendingUp className="h-12 w-12 text-gray-400 mx-auto mb-4" />
@@ -14,31 +14,13 @@ const ROIDashboard = ({ roiData, queries }) => {
     );
   }
 
-  // Calculate aggregate metrics from all queries
+  // Calculate aggregate metrics from all queries for display
   const totalQueries = queries.length;
   const totalCost = queries.reduce((sum, q) => sum + (q.costAnalysis?.totalCost || 0), 0);
-  const avgResponseTime = queries.reduce((sum, q) => sum + q.responseTime, 0) / totalQueries;
+  const avgResponseTime = totalQueries > 0 ? queries.reduce((sum, q) => sum + q.responseTime, 0) / totalQueries : 0;
   const totalCachedTokens = queries.reduce((sum, q) => sum + (q.costAnalysis?.cachedTokens || 0), 0);
   const totalNewTokens = queries.reduce((sum, q) => sum + (q.costAnalysis?.newTokens || 0), 0);
-  const avgCacheEfficiency = queries.reduce((sum, q) => sum + (q.costAnalysis?.cacheEfficiency || 0), 0) / totalQueries;
-  
-  // Calculate estimated time savings (assuming 75% time saved with caching)
-  const totalQueryTime = queries.reduce((sum, q) => sum + q.responseTime, 0);
-  const estimatedTimeSaved = (totalQueryTime / 1000) * 0.75; // in seconds
-  const estimatedHoursSaved = estimatedTimeSaved / 3600;
-  
-  // Calculate value (assuming $500/hour attorney rate)
-  const attorneyHourlyRate = 500;
-  const estimatedValueDelivered = estimatedHoursSaved * attorneyHourlyRate;
-
-  // Use latest ROI data or calculate from queries
-  const currentROIData = roiData || {
-    summary: {
-      totalAnnualImpact: estimatedValueDelivered * 12, // Monthly to annual
-      roiPercentage: ((estimatedValueDelivered * 12) / (totalCost * 12)) * 100, // Annual ROI
-      paybackPeriodMonths: Math.max(1, Math.round((totalCost * 12) / (estimatedValueDelivered * 12)))
-    }
-  };
+  const avgCacheEfficiency = totalQueries > 0 ? queries.reduce((sum, q) => sum + (q.costAnalysis?.cacheEfficiency || 0), 0) / totalQueries : 0;
 
   return (
     <div className="space-y-6">
@@ -58,31 +40,31 @@ const ROIDashboard = ({ roiData, queries }) => {
             <div>
               <p className="text-green-100 text-sm">Annual Impact</p>
               <p className="text-2xl font-bold">
-                {formatCurrency(currentROIData.summary.totalAnnualImpact)}
+                {formatCurrency(roiData.summary.totalAnnualImpact)}
               </p>
             </div>
             <DollarSign className="h-8 w-8 text-green-200" />
           </div>
         </div>
-        
+
         <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg p-6 text-white">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-blue-100 text-sm">ROI Percentage</p>
               <p className="text-2xl font-bold">
-                {formatPercentage(currentROIData.summary.roiPercentage)}
+                {formatPercentage(roiData.summary.roiPercentage)}
               </p>
             </div>
             <Target className="h-8 w-8 text-blue-200" />
           </div>
         </div>
-        
+
         <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg p-6 text-white">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-purple-100 text-sm">Payback Period</p>
               <p className="text-2xl font-bold">
-                {currentROIData.summary.paybackPeriodMonths} months
+                {roiData.summary.paybackPeriodMonths} months
               </p>
             </div>
             <Calendar className="h-8 w-8 text-purple-200" />
@@ -134,19 +116,19 @@ const ROIDashboard = ({ roiData, queries }) => {
             <div className="flex justify-between items-center">
               <span className="text-gray-600">Total Investment</span>
               <span className="font-semibold text-gray-900">
-                {formatCurrency(totalCost)}
+                {formatCurrency(roiData.summary.investmentAmount || totalCost)}
               </span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-gray-600">Value Delivered</span>
+              <span className="text-gray-600">Monthly Impact</span>
               <span className="font-semibold text-green-600">
-                {formatCurrency(estimatedValueDelivered)}
+                {formatCurrency(roiData.summary.totalMonthlyImpact)}
               </span>
             </div>
             <div className="flex justify-between items-center pt-2 border-t">
               <span className="text-gray-600 font-medium">Net Return</span>
               <span className="font-semibold text-green-600">
-                {formatCurrency(estimatedValueDelivered - totalCost)}
+                {formatCurrency(roiData.summary.totalAnnualImpact - (roiData.summary.investmentAmount || totalCost))}
               </span>
             </div>
           </div>
@@ -270,86 +252,6 @@ const ROIDashboard = ({ roiData, queries }) => {
         </div>
       </div>
 
-      {/* Time Savings Analysis */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-        <h3 className="text-lg font-semibold text-blue-900 mb-4">Time Savings Analysis</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
-          <div>
-            <Clock className="h-8 w-8 text-blue-600 mx-auto mb-2" />
-            <p className="text-sm text-blue-700">Time Saved</p>
-            <p className="text-xl font-semibold text-blue-900">
-              {estimatedHoursSaved.toFixed(1)} hours
-            </p>
-          </div>
-          <div>
-            <DollarSign className="h-8 w-8 text-blue-600 mx-auto mb-2" />
-            <p className="text-sm text-blue-700">Value at ${attorneyHourlyRate}/hr</p>
-            <p className="text-xl font-semibold text-blue-900">
-              {formatCurrency(estimatedValueDelivered)}
-            </p>
-          </div>
-          <div>
-            <PieChart className="h-8 w-8 text-blue-600 mx-auto mb-2" />
-            <p className="text-sm text-blue-700">Efficiency Gain</p>
-            <p className="text-xl font-semibold text-blue-900">
-              {formatPercentage(avgCacheEfficiency)}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Monthly Projection */}
-      <div className="bg-white border border-gray-200 rounded-lg p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Monthly Projection</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <h4 className="font-medium text-gray-700 mb-3">Assumptions</h4>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-gray-600">Queries per month:</span>
-                <span className="font-medium">100</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Attorney hourly rate:</span>
-                <span className="font-medium">{formatCurrency(attorneyHourlyRate)}/hr</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Cache efficiency:</span>
-                <span className="font-medium">{formatPercentage(avgCacheEfficiency)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Time savings per query:</span>
-                <span className="font-medium">75%</span>
-              </div>
-            </div>
-          </div>
-          
-          <div>
-            <h4 className="font-medium text-gray-700 mb-3">Projected Monthly Impact</h4>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-gray-600">Monthly queries:</span>
-                <span className="font-medium">100</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Monthly cost:</span>
-                <span className="font-medium">{formatCurrency(totalCost * (100 / totalQueries))}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Time saved:</span>
-                <span className="font-medium">{(estimatedHoursSaved * (100 / totalQueries)).toFixed(1)} hours</span>
-              </div>
-              <div className="flex justify-between pt-2 border-t">
-                <span className="text-gray-600 font-medium">Monthly value:</span>
-                <span className="font-medium text-green-600">
-                  {formatCurrency(estimatedValueDelivered * (100 / totalQueries))}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* ROI Insights */}
       <div className="bg-green-50 border border-green-200 rounded-lg p-6">
         <h3 className="text-lg font-semibold text-green-900 mb-4">ROI Insights</h3>
@@ -358,9 +260,8 @@ const ROIDashboard = ({ roiData, queries }) => {
             <h4 className="font-medium text-green-800 mb-2">Key Benefits</h4>
             <ul className="text-sm text-green-700 space-y-1">
               <li>• {formatPercentage(avgCacheEfficiency)} average cache efficiency reduces costs</li>
-              <li>• Each query saves approximately {Math.round((avgResponseTime / 1000) * 0.75 * 60)} minutes</li>
               <li>• High ROI indicates strong value proposition</li>
-              <li>• Payback period of {currentROIData.summary.paybackPeriodMonths} months shows fast returns</li>
+              <li>• Payback period of {roiData.summary.paybackPeriodMonths} months shows fast returns</li>
             </ul>
           </div>
           <div>
@@ -369,7 +270,6 @@ const ROIDashboard = ({ roiData, queries }) => {
               <li>• Increase query volume for better ROI</li>
               <li>• Focus on frequently asked questions</li>
               <li>• Leverage cache for similar document types</li>
-              <li>• Track time savings for billing justification</li>
             </ul>
           </div>
         </div>
